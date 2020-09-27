@@ -1,0 +1,6 @@
+{
+"access_key_id":"AABBCCDDEEFF11223344",
+"secret_access_key":"aaBBCCDDEEF/aabbccddeeff1122334455666778",
+"region":"us-east-1",
+"instance_ssh_login_key_name":"exits_instance_login_key_pair"
+}

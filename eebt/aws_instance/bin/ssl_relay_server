@@ -1,0 +1,205 @@
+#!/usr/bin/env python3
+import select
+import socket
+import sys
+import time
+
+###############
+import hashlib
+from Crypto.Cipher import AES
+import ssl
+from bridge_config import *
+import random
+import string
+###############
+
+
+
+pub_ip = get_public_ip()
+cert_dir = get_cert_dir()
+keyFile = "/%s/%s_key.pem" % (cert_dir, pub_ip) # provide full path to the private key file location
+certFile = "/%s/%s.pem" % (cert_dir, pub_ip)  # provide full path to the Certificate file location
+
+
+# noinspection PyMethodMayBeStatic
+class RelayServer:
+    def __init__(self, listen_host, listen_port, server_host, server_port):
+        ###############
+        rand_str=''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(16)) 
+        self.communication_key = hashlib.sha256(rand_str.encode(
+            'utf8')).digest()  # TODO
+        self.IV = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(16))  # Initialization vector should always be 16 bit
+        self.aes_obj = AES.new(self.communication_key, AES.MODE_CFB,
+                               self.IV)  # creating an object to encrypt our data with
+        self.context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        self.context.load_cert_chain(certFile, keyfile=keyFile)
+        ###############
+        self.listen_host = listen_host
+        self.listen_port = listen_port
+        self.server_host = server_host
+        self.server_port = server_port
+        self.listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            self.listen_socket.bind((self.listen_host, self.listen_port))
+        except socket.error as e:
+            logging("ERROR", "[L-|-SERVER   R] Listen Socket bind failed %s" % e)
+            sys.exit()
+        try:
+            self.listen_socket.listen(10)
+            logging("INFO",
+                    "[Proxy Local] Listen on %s %d" % (self.listen_host, self.listen_port))
+        except Exception as e:
+            logging("ERROR", "Failed to listen  on %s %d %s" % (self.listen_host, self.listen_port, e))
+            sys.exit()
+        ###############
+        self.listen_socket_ssl = self.context.wrap_socket(self.listen_socket, server_side=True)
+        self.connection_list = [self.listen_socket_ssl]
+        # self.connection_list = [self.listen_socket]
+        ###############
+        self.lr_dict = {}
+        self.rl_dict = {}
+        self.socket_to_remove = []
+        self.stop = False
+
+    def _do_remove_sockets(self):
+        len_before = len(self.connection_list)
+        self.connection_list = [i for i in self.connection_list if i not in self.socket_to_remove]
+        self.socket_to_remove.clear()
+        if len_before != len(self.connection_list):
+            logging("INFO", "[L   SERVER   R] %d sockets left" % len(self.connection_list))
+
+    def _clear_socket_info_only(self, sock):
+        if sock in self.connection_list:
+            if sock not in self.socket_to_remove:
+                self.socket_to_remove.append(sock)
+        if id(sock) in self.lr_dict.keys():
+            del self.lr_dict[id(sock)]
+        elif id(sock) in self.rl_dict.keys():
+            del self.rl_dict[id(sock)]
+
+    def close_paired_socket(self, sock):
+        if id(sock) in self.lr_dict.keys():
+            paired_sock = self.lr_dict[id(sock)]
+        elif id(sock) in self.rl_dict.keys():
+            paired_sock = self.rl_dict[id(sock)]
+        else:
+            paired_sock = None
+        self._close_socket_only(sock)
+        self._close_socket_only(paired_sock)
+        self._clear_socket_info_only(sock)
+        self._clear_socket_info_only(paired_sock)
+
+    def _close_socket_only(self, sock):
+        if type(sock) == socket.socket:
+            try:
+                sock.shutdown(socket.SHUT_RDWR)
+                sock.close()
+            except Exception as e:
+                logging("ERROR", "[L   SERVER   R] socket %d close failed" % id(sock))
+
+    def on_listen_socket_for_read(self):
+        ###############
+        # l_socket, address = self.listen_socket.accept()
+        try:
+            l_socket, address = self.listen_socket_ssl.accept()
+        except Exception as e:
+            logging("ERROR", "[L-X>SERVER   R] New Local Conn accept failed: %s" % (e))
+            return 'failed'
+        ###############
+        l_socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+        l_socket.settimeout(SOCKET_TIMEOUT)
+        r_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        logging("INFO", "[L=> SERVER   R] New Local Conn: %s:%d" % (address[0], address[1]))
+        try:
+            r_socket.settimeout(SOCKET_TIMEOUT)
+            
+            r_socket.connect((self.server_host, self.server_port))
+
+            self.connection_list.append(l_socket)
+            self.connection_list.append(r_socket)
+            self.lr_dict[id(l_socket)] = r_socket
+            self.rl_dict[id(r_socket)] = l_socket
+            print(id(l_socket), id(r_socket))
+            return 'success'
+        except Exception as e:
+            logging("ERROR",
+                    "[L===SERVER=|=R] Tunnel to %s:%d connection failed, %s" % (self.server_host, self.server_port, e))
+            l_socket.shutdown(socket.SHUT_RDWR)
+            l_socket.close()
+            return 'failed'
+
+    def on_l_socket_for_read(self, source_socket):
+        try:
+            dst_socket = self.lr_dict[id(source_socket)]
+        except Exception as e:
+            logging("ERROR", "[L---SERVER-?-R] No corresponding r_socket found %s" % e)
+            self._close_socket_only(source_socket)
+            self._clear_socket_info_only(source_socket)
+            return
+        try:
+            data = source_socket.recv(recv_buffer_size)
+        except Exception as e:
+            logging("ERROR", "[L-x-SERVER   R] l_socket read error %s" % e)
+            self.close_paired_socket(source_socket)
+            return
+        if len(data) == 0:
+            logging("INFO", "[L - SERVER   R] l_socket close")
+            self.close_paired_socket(source_socket)
+            return
+        logging("INFO", "[L-->SERVER   R] %d bytes" % len(data))
+        try:
+            dst_socket.send(data)
+        except Exception as e: #(BrokenPipeError, ConnectionResetError):
+            logging("ERROR", "[L---SERVER-|>R] send failed %d bytes, %s" % (len(data), e))
+            self.close_paired_socket(source_socket)
+
+    def on_r_socket_for_read(self, source_socket):
+        try:
+            dst_socket = self.rl_dict[id(source_socket)]
+        except Exception as e:
+            logging("ERROR", "[L-?-SERVER---R] No corresponding l_socket found %s" % e)
+            self._close_socket_only(source_socket)
+            self._clear_socket_info_only(source_socket)
+            return
+        try:
+            data = source_socket.recv(recv_buffer_size)
+        except Exception as e:
+            logging("ERROR", "[L   SERVER-x-R] r_socket read error %s" % e)
+            self.close_paired_socket(source_socket)
+            return
+        if len(data) == 0:
+            logging("INFO", "[L   SERVER - R] l_socket close")
+            self.close_paired_socket(source_socket)
+            return
+        logging("INFO", "[L   SERVER<--R] %d bytes" % len(data))
+        try:
+            dst_socket.send(data)
+            logging("INFO", "[L<--SERVER---R] %d bytes" % len(data))
+        except (BrokenPipeError, ConnectionResetError):
+            logging("ERROR", "[L<|-SERVER---R] send failed %d bytes" % len(data))
+            self.close_paired_socket(source_socket)
+
+    def run(self):
+        while not self.stop:
+            read_sockets, write_sockets, error_sockets = select.select(self.connection_list, self.connection_list,
+                                                                       self.connection_list)
+            for read_socket in read_sockets:
+                ###############
+                if id(read_socket) == id(self.listen_socket_ssl):
+                    res = self.on_listen_socket_for_read()
+                    print(res)
+                ###############
+                elif id(read_socket) in self.lr_dict.keys():
+                    self.on_l_socket_for_read(read_socket)
+                elif id(read_socket) in self.rl_dict.keys():
+                    self.on_r_socket_for_read(read_socket)
+                else:
+                    print('error')
+            self._do_remove_sockets()
+            time.sleep(0.01)
+
+
+if __name__ == '__main__':
+    rs = RelayServer('0.0.0.0', ssl_relay_server_listen_port, '127.0.0.1', 10800)
+    rs.run()

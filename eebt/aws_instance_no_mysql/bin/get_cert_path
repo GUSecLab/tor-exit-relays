@@ -1,0 +1,17 @@
+#!/bin/bash
+eval homedir="~"
+if [ $homedir == "/root" ]; then
+   homedir='/home/ubuntu'
+fi
+cert_path=$homedir
+# ec2 get public ip:
+if [ `uname -a | grep raspberrypi | wc -l` -eq 0 ]
+then
+	pub_ip=`curl -s http://169.254.169.254/latest/meta-data/public-ipv4` 2>>/dev/null
+	instance_id=`curl -s http://169.254.169.254/latest/meta-data/instance-id` 2>>/dev/null
+else
+	pub_ip=`curl -s https://api.ipify.org` 2>>/dev/null
+	instance_id="raspberrypi" 
+fi
+
+echo -n "$cert_path/$pub_ip.pem"

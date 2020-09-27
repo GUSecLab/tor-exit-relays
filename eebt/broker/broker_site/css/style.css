@@ -1,0 +1,8 @@
+body {
+    text-align: center;
+    background-color: #E8CEC5;
+}
+
+#error {
+    font-family: "Courier New", Courier, monospace;
+}

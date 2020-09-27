@@ -1,0 +1,14 @@
+This repo contains all codes & setup instructions to setup a running Ephemeral Exit Bridge for Tor.
+
+
+Just like we listed in paper, the whole project consists of 4 parts, they are:
+-------------------------------------------------------
+Module                      | Directory               |
+-------------------------------------------------------
+# Server Side:              |                         |
+1, Broker.                  |./broker/                |
+2, AWS Instance.            |./aws_instance/          |
+# User Side:                |                         |
+3, Local Relay              |./relay_local/           |
+4, TorBrowser Extension     |./browser_extension/     |
+-------------------------------------------------------

@@ -1,0 +1,9 @@
+# Method 1
+sudo dpkg-reconfigure -plow unattended-upgrades
+# then follow instructions
+
+# Method 2
+# sudo nano /etc/apt/apt.conf.d/20auto-upgrades
+# change 	APT::Periodic::Unattended-Upgrade "1";
+# to		APT::Periodic::Unattended-Upgrade "0";
+

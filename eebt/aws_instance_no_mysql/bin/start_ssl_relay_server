@@ -1,0 +1,4 @@
+#!/bin/bash
+nohup sockd >>/dev/null 2>&1 &
+nohup ssl_relay_server >>/dev/null 2>&1 &
+exit 0

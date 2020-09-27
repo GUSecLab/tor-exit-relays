@@ -1,0 +1,280 @@
+#!/usr/bin/env python3
+import json
+import os
+import select
+import socket
+import sys
+import time
+import logging
+import subprocess
+###############
+import hashlib
+from Crypto.Cipher import AES
+import ssl
+import random
+import string
+
+###############
+logging.basicConfig(format='%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
+                    datefmt='%d-%m-%Y:%H:%M:%S',
+                    level=logging.INFO)
+
+
+# TODO disconnect when quota/session ends.
+
+
+def load_config(conf_path):
+    try:
+        with open(conf_path, "r") as f:
+            conf = json.load(f)
+        return conf
+    except Exception as e:
+        print("ERROR %s" % e)
+        conf = {
+            "enable_ssl": True,
+            "user": "test",
+            "passwd": "123456",
+            "bytes_max": 0,
+            "valid_until": 0,
+            "socket_timeout": 60,
+            "recv_buffer_size": 4096,
+            "relay_server_listen_addr": "0.0.0.0",
+            "relay_server_listen_port": 10182,
+            "socks5_server_conn_addr": "127.0.0.1",
+            "socks5_server_conn_port": 10800,
+            "pub_ip": None,
+            "cert_dir": None,
+            "key_file": "",
+            "cert_file": "",
+            "experiment_mode": False
+        }
+        return conf
+
+
+# noinspection PyMethodMayBeStatic
+class RelayServer:
+    def __init__(self, conf_path):
+        self.conf = load_config(conf_path)
+        ###############
+        if self.conf["enable_ssl"]:
+            rand_str = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(16))
+            self.communication_key = hashlib.sha256(rand_str.encode(
+                'utf8')).digest()  # TODO
+            self.IV = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(16))
+            self.aes_obj = AES.new(self.communication_key, AES.MODE_CFB,
+                                   self.IV)  # creating an object to encrypt our data with
+            self.context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            self.context.load_cert_chain(self.conf["cert_file"], keyfile=self.conf["key_file"])
+        ###############
+        self.check_quota = False if self.conf["bytes_max"] == 0 else True
+        self.check_time = False if self.conf["valid_until"] == 0 else True
+        self.logger = logging.getLogger('RelayServer')
+        self.listen_host = self.conf["relay_server_listen_addr"]
+        self.listen_port = self.conf["relay_server_listen_port"]
+        self.server_host = self.conf["socks5_server_conn_addr"]
+        self.server_port = self.conf["socks5_server_conn_port"]
+        self._listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.un_auth_l_sockets = []
+        self.bytes_remain = self.conf["bytes_max"]
+        try:
+            self._listen_socket.bind((self.listen_host, self.listen_port))
+        except socket.error as e:
+            self.logger.error("[L-|-SERVER   R] Listen Socket bind failed %s" % e)
+            sys.exit()
+        try:
+            self._listen_socket.listen(10)
+            self.logger.info("[Proxy Local] Listen on %s %d" % (self.listen_host, self.listen_port))
+        except Exception as e:
+            self.logger.error("Failed to listen  on %s %d %s" % (self.listen_host, self.listen_port, e))
+            sys.exit()
+        ###############
+        if self.conf["enable_ssl"]:
+            self.listen_socket = self.context.wrap_socket(self._listen_socket, server_side=True)
+        else:
+            self.listen_socket = self._listen_socket
+        self.connection_list = [self.listen_socket]
+        ###############
+        self.lr_dict = {}
+        self.rl_dict = {}
+        self.socket_to_remove = []
+        self.usage_info = {}  # self.usage_info["l_socket_id"] = {"up": 0, "down": 0}
+        self.stop = False
+
+    def close_single_socket(self, sock):
+        if sock in self.connection_list:
+            self.connection_list.remove(sock)
+        if id(sock) in self.lr_dict.keys():
+            del self.lr_dict[id(sock)]
+        elif id(sock) in self.rl_dict.keys():
+            del self.rl_dict[id(sock)]
+        if id(sock) in self.usage_info:
+            del self.usage_info[id(sock)]
+        if type(sock) == socket.socket:
+            try:
+                sock.close()
+            except Exception as e:
+                self.logger.error("socket %d close failed %s" % (id(sock), e))
+
+    def on_listen_socket_for_read(self):
+        ###############
+        try:
+            l_socket, address = self.listen_socket.accept()
+            self.logger.info("[L=> SERVER   R] New Local Conn: %s:%d" % (address[0], address[1]))
+        except Exception as e:
+            self.logger.error("[L-X>SERVER   R] New Local Conn accept failed: %s" % (e))
+            return 'failed'
+        ###############
+        l_socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+        l_socket.settimeout(self.conf["socket_timeout"])
+        self.connection_list.append(l_socket)
+        self.un_auth_l_sockets.append(l_socket)
+
+    def create_r_socket(self, l_socket):
+        r_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            r_socket.settimeout(self.conf["socket_timeout"])
+            r_socket.connect((self.server_host, self.server_port))
+            self.connection_list.append(r_socket)
+            self.lr_dict[id(l_socket)] = r_socket
+            self.rl_dict[id(r_socket)] = l_socket
+            print(id(l_socket), id(r_socket))
+            return 'success'
+        except Exception as e:
+            self.logger.error(
+                "[L===SERVER=|=R] Tunnel to %s:%d connection failed, %s" % (self.server_host, self.server_port, e))
+            l_socket.shutdown(socket.SHUT_RDWR)
+            l_socket.close()
+            return 'failed'
+
+    def on_l_socket_for_read(self, source_socket):
+        if source_socket in self.un_auth_l_sockets:
+            self.un_auth_l_sockets.remove(source_socket)
+            data = source_socket.recv(self.conf["recv_buffer_size"])
+            if len(data) == 0:
+                self.close_single_socket(source_socket)
+                return
+            if len(data) > 0:
+                if data.decode('utf8') == "%s:%s" % (self.conf["user"], self.conf["passwd"]):
+                    self.logger.info("[L---SERVER---R] Authed")
+                    source_socket.send(bytes(bytearray([0x01, 0x01])))  # todo: add valid, quota here
+                    self.create_r_socket(source_socket)
+                    self.usage_info[id(source_socket)] = {"up": 0, "down": 0}
+                else:
+                    self.logger.info("[L---SERVER---R] Auth failed")
+                    source_socket.send(bytes(bytearray([0x01, 0x00])))  # todo: add valid, quota here
+                    self.close_single_socket(source_socket)
+        else:
+            try:
+                dst_socket = self.lr_dict[id(source_socket)]
+            except Exception as e:
+                self.logger.error("[L---SERVER-?-R] No corresponding r_socket found %s" % e)
+                self.close_single_socket(source_socket)
+                return
+            try:
+                data = source_socket.recv(self.conf["recv_buffer_size"])
+            except Exception as e:
+                self.logger.error("[L-x-SERVER   R] l_socket read error %s" % e)
+                self.close_single_socket(source_socket)
+                self.close_single_socket(dst_socket)
+                return
+            if len(data) == 0:
+                self.logger.error("[L - SERVER   R] l_socket close")
+                self.close_single_socket(source_socket)
+                self.close_single_socket(dst_socket)
+                return
+            try:
+                dst_socket.send(data)
+                self.usage_info[id(source_socket)]["up"] += len(data)
+                self.bytes_remain -= len(data)
+            except Exception as e:
+                self.logger.error("[L---SERVER-|>R] send failed %d bytes, %s" % (len(data), e))
+                self.close_single_socket(source_socket)
+                self.close_single_socket(dst_socket)
+
+    def on_r_socket_for_read(self, source_socket):
+        try:
+            dst_socket = self.rl_dict[id(source_socket)]
+        except Exception as e:
+            self.logger.error("[L-?-SERVER---R] No corresponding l_socket found %s" % e)
+            self.close_single_socket(source_socket)
+            return
+        try:
+            data = source_socket.recv(self.conf["recv_buffer_size"])
+        except Exception as e:
+            self.logger.error("[L   SERVER-x-R] r_socket read error %s" % e)
+            self.close_single_socket(source_socket)
+            self.close_single_socket(dst_socket)
+            return
+        if len(data) == 0:
+            self.logger.info("[L   SERVER - R] l_socket close")
+            self.close_single_socket(source_socket)
+            self.close_single_socket(dst_socket)
+            return
+        self.logger.info("[L   SERVER<--R] %d bytes" % len(data))
+        try:
+            dst_socket.send(data)
+            self.usage_info[id(dst_socket)]["down"] += len(data)
+            self.bytes_remain -= len(data)
+        except (BrokenPipeError, ConnectionResetError):
+            self.logger.error("[L<|-SERVER---R] send failed %d bytes" % len(data))
+            self.close_single_socket(source_socket)
+            self.close_single_socket(dst_socket)
+
+    def usage_check(self):
+        if self.check_quota:
+            if self.bytes_remain < 0:
+                print("Terminate HERE")
+                os.system("shutdown -h now")
+                pass  # TODO terminate here
+        if self.check_time:
+            if time.time() > self.conf["valid_until"]:
+                print("Terminate HERE")
+                os.system("shutdown -h now")
+                pass  # TODO terminate here
+
+    def print_info(self):
+        # print all socks info.
+        os.system("clear")
+        s_id_audited = []
+        print("Guard Sockets(Data): %d" % id(self.listen_socket))
+        s_id_audited.append(id(self.listen_socket))
+        print("##### Data Sockets:")
+        for k in self.usage_info:
+            print(k, self.usage_info[k])
+        print("###########################")
+
+    def run(self):
+        ts = time.time()
+        while not self.stop:
+            try:
+                read_sockets, _, _ = select.select(self.connection_list, [], [], 1)
+            except ValueError:
+                # for ValueError: file descriptor cannot be a negative integer (-1)
+                self.connection_list = [i for i in self.connection_list if i != -1]
+                continue
+
+            for read_socket in read_sockets[:]:
+                ###############
+                if id(read_socket) == id(self.listen_socket):
+                    self.on_listen_socket_for_read()
+                ###############
+                elif id(read_socket) in self.lr_dict.keys():
+                    self.on_l_socket_for_read(read_socket)
+                elif read_socket in self.un_auth_l_sockets:
+                    self.on_l_socket_for_read(read_socket)
+                elif id(read_socket) in self.rl_dict.keys():
+                    self.on_r_socket_for_read(read_socket)
+                else:
+                    self.logger.error("[L ? SERVER ? R] orphan socket")
+                    self.close_single_socket(read_socket)
+            time.sleep(0.01)
+            if time.time() > ts + .5:
+                self.print_info()
+                ts += .5
+            self.usage_check()
+
+
+if __name__ == '__main__':
+    rs = RelayServer("/tmp/relay_server_conf.json")
+    rs.run()

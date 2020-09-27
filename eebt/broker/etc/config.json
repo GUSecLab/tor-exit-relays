@@ -1,0 +1,15 @@
+{
+"pool_maintainer_host":"127.0.0.1",
+"pool_maintainer_port":6667,
+"instance_cgi_path":"/var/www/htmls/cgi/spawn",
+"pool_balancing_interval":60,
+"db_user":"root",
+"db_passwd":"eebt",
+"db_host":"localhost",
+"logger_params_update_interval":60,
+"ws_cgi_key":"123456",
+"enable_ws":true,
+"ws_uri":"ws://127.0.0.1:8080",
+"ca_path":"/home/yourname/ca",
+
+}

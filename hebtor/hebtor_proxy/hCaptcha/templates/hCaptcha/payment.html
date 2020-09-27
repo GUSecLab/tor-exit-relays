@@ -1,0 +1,20 @@
+{% load static %}
+<link rel="stylesheet" type="text/css" href="{% static 'hCaptcha/style.css' %}">
+<script src="https://hcaptcha.com/1/api.js" async defer></script>
+<h1>Please pay for the proxy first by completing the hCaptcha</h1>
+
+<form action="" method="POST">
+    {% csrf_token %}
+    <label>
+            <textarea rows="4" cols="50" name="session_id">{{ session_id }}</textarea>
+        </label>
+        <label>
+            <textarea rows="4" cols="50" name="hidden_address">{{ hidden_address }}</textarea>
+        </label>
+        <label>
+            <textarea rows="4" cols="50" name="signature">{{ signature }}</textarea>
+        </label>
+    <br>
+    <div class="h-captcha" data-sitekey="a886bf30-f864-4e3b-b688-0991c5a4ce20"></div>
+      <input type="submit" value="continue" />
+</form>

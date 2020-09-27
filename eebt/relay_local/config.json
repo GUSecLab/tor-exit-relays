@@ -1,0 +1,14 @@
+{
+  "SOCKET_TIMEOUT": 5,
+  "RECV_BUFFER_SIZE": 4096,
+  "LocalListenConnURI": "tcp://127.0.0.1:12345",
+  "LocalListenConfigURI": "tcp://127.0.0.1:12346",
+  "LocalDstServerURI": "tcp://0.0.0.0:6666",
+  "BridgeExpireSeconds": 3500,
+  "AuthURI": "http://127.0.0.1:12346/prepare",
+  "BrokerURI": "http://torbrokerzubzvqh.onion/hcaptcha.php",
+  "MaxAllowedRemoteFailedCnt": 5,
+  "ExperimentMode": false,
+  "EnablePerTabPerHostInstance": false,
+  "TBBAuthCookiePath": ""
+}

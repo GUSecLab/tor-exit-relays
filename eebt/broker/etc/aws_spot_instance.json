@@ -1,0 +1,22 @@
+{
+"spot_instance_count":1,
+"spot_type":"one-time",
+"spot_launch_specification":{
+        "ImageId": "ami-112233445566aabbc",
+        "InstanceType": "t3.nano",
+        "KeyName": "exits_instance_login_key_pair",
+        "IamInstanceProfile": 
+        {
+            "Arn": "arn:aws:iam::112233445566:instance-profile/bridge"
+        },
+        "NetworkInterfaces": [{
+            "DeviceIndex": 0,
+            "SubnetId": "subnet-aabbccdd",
+            "DeleteOnTermination": true,
+            "Groups": [
+                "sg-00112233445566778"
+            ],
+            "AssociatePublicIpAddress": true
+        }]
+    }
+}

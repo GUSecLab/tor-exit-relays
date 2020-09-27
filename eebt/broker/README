@@ -1,0 +1,31 @@
+1, run install.sh
+
+2, replace  
+		~/onion_service/hostname
+		~/onion_service/private_key
+	with your own hidden service credentials.
+
+3, setup CA:
+	cd broker_ca
+	./setup.sh
+	./create_ca.sh
+
+4, setup cgi configurations:
+	nano /var/www/html/cgi/spawn.py
+
+	replace configurations between line 11 to line 55 with your aws info.
+
+5, setup websocket CGI_KEY:
+	a random generated string should replaced 123456 as CGI_KEY of ws_server.py and /var/www/html/cgi/spawn.py
+
+6, setup CA folder permissions:
+	~/ca folder should be able to accessed by user www-data(to sign csr), please chmod and chown accordingly. Then check if it takes effect by logging as www-data:
+		sudo su -s /bin/bash www-data
+
+7, start websocket server
+	nohup python3 ws_server.py >>/dev/null 2>&1 &
+
+8, start tor and apache
+	# nohup & if needed
+	tor -f torrc 
+	sudo service apache2 restart

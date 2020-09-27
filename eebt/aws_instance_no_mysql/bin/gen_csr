@@ -1,0 +1,11 @@
+#!/bin/bash
+source bridge_config.sh
+echo $cert_path
+echo $pub_ip
+echo $instance_id
+openssl genrsa -out $cert_path/"$pub_ip"_key.pem 2048
+openssl req -new -key $cert_path/"$pub_ip"_key.pem\
+ -out $cert_path/$pub_ip.csr\
+ -subj "/C=US/ST=VA/L=VA/O=Arl/CN=$pub_ip"\
+>>/dev/null 2>&1
+

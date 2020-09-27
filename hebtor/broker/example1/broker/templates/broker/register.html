@@ -1,0 +1,22 @@
+{% load static %}
+<link rel="stylesheet" type="text/css" href="{% static 'broker/style.css' %}">
+<script src="https://hcaptcha.com/1/api.js" async defer></script>
+<h1>Please paste your public key to register</h1>
+
+<form action="" method="POST">
+    {% csrf_token %}
+    <label>
+        <textarea rows="4" cols="50" name="public_key" placeholder="Paste your PEM format public key here."></textarea>
+    </label>
+    <br />
+    <label>
+        <textarea rows="1" cols="50" name="verification_key" placeholder="Paste your hCaptcha verification key here."></textarea>
+    </label>
+    <br />
+    <label>
+        <textarea rows="1" cols="50" name="site_key" placeholder="Paste your hCaptcha site key here."></textarea>
+    </label>
+    <div class="h-captcha" data-sitekey="a886bf30-f864-4e3b-b688-0991c5a4ce20"></div>
+      <br />
+      <input type="submit" value="register" />
+</form>

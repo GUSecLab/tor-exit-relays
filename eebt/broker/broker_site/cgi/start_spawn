@@ -1,0 +1,5 @@
+#!/bin/bash
+BASEDIR=$(dirname "$0")
+nohup python1 $BASEDIR/spawn.py $@ >>/dev/null 2>&1 &
+exit 0
+

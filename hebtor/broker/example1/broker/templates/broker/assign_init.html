@@ -1,0 +1,19 @@
+{% load static %}
+<link rel="stylesheet" type="text/css" href="{% static 'broker/style.css' %}">
+<script src="https://hcaptcha.com/1/api.js" async defer></script>
+<h2>{{ error_msg }}</h2>
+<h1>Please finish hCaptcha to get a proxy</h1>
+<h2>Current hCaptcha reward will be wired to: {{ captcha_round }}</h2>
+<form action="" method="POST">
+    {% csrf_token %}
+    <label>
+        <textarea rows="4" cols="50" name="session_id">{{ session_id }}</textarea>
+    </label>
+    <label>
+        <textarea rows="4" cols="50" name="signature">{{ signature }}</textarea>
+        <textarea rows="1" cols="50" name="captcha_round" hidden>{{ captcha_round }}</textarea>
+    </label>
+    <div class="h-captcha" data-sitekey={{site_key}}></div>
+      <br />
+      <input type="submit" value="assign" />
+</form>

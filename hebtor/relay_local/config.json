@@ -1,0 +1,21 @@
+{
+  "SOCKET_TIMEOUT": 5,
+  "RECV_BUFFER_SIZE": 4096,
+  "LocalListenConnURI": "tcp://127.0.0.1:12345",
+  "LocalListenConfigURI": "tcp://127.0.0.1:12346",
+  "LocalListenWSURI": "ws://127.0.0.1:12348",
+  "BridgeExpireSeconds": 3500,
+  "AuthURI": "http://127.0.0.1:12346/prepare",
+  "BrokerTagUrl": "http://z4xddbewr6usxt2se2ooz4htxnepqb734qobpfafg5ep4yzqx4bz6iyd.onion/tag",
+  "BrokerURI": "http://z4xddbewr6usxt2se2ooz4htxnepqb734qobpfafg5ep4yzqx4bz6iyd.onion/assign_init",
+  "BrokerTicketKeyUrl": "http://z4xddbewr6usxt2se2ooz4htxnepqb734qobpfafg5ep4yzqx4bz6iyd.onion/ticket_key",
+  "MaxAllowedRemoteFailedCnt": 5,
+  "ExperimentMode": false,
+  "ExperimentRemoteHost": "v4knvxtnf3tztltv.onion",
+  "ExperimentRemotePort": 1080,
+  "EnablePerTabPerHostInstance": false,
+  "EnableSSL":false,
+  "EnableTunnelAuth":false,
+  "EnableSocks5Routing":true,
+  "TBBAuthCookiePath": ""
+}

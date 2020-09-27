@@ -1,0 +1,4 @@
+#!/bin/bash
+USER_NAME=$1
+mysql -uradius -pradpass --execute="use radius;delete from radcheck where username='$USER_NAME';"
+echo "DEL $USER_NAME" > /dev/udp/127.0.0.1/54321

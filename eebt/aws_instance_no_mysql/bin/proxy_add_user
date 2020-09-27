@@ -1,0 +1,26 @@
+#!/bin/bash
+source bridge_config.sh
+USER_NAME=$1
+USER_PADDWD=$2
+USER_QUOTA=$3
+ALIVE_TIME=$4
+
+[ -z "$USER_QUOTA" ] && USER_QUOTA=0
+[ -z "$ALIVE_TIME" ] && ALIVE_TIME=0
+
+
+current_time=`date +%s`
+alive_seconds=$(($ALIVE_TIME * 60))
+valid_until=$(($current_time + $alive_seconds))
+
+
+
+tmp=$(mktemp)
+jq ".user = \""$USER_NAME"\"" /tmp/relay_server_conf.json > "$tmp" && mv "$tmp" /tmp/relay_server_conf.json
+tmp=$(mktemp)
+jq ".passwd = \""$USER_PADDWD"\"" /tmp/relay_server_conf.json > "$tmp" && mv "$tmp" /tmp/relay_server_conf.json
+tmp=$(mktemp)
+jq ".bytes_max = "$USER_QUOTA"" /tmp/relay_server_conf.json > "$tmp" && mv "$tmp" /tmp/relay_server_conf.json
+tmp=$(mktemp)
+jq ".valid_until = "$valid_until"" /tmp/relay_server_conf.json > "$tmp" && mv "$tmp" /tmp/relay_server_conf.json
+[ ! -z "$ALIVE_TIME" ] && shutdown -h $ALIVE_TIME

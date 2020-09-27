@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html>
+
+    <h3> You are about to visit: </h3>
+
+    <p id="demo">JavaScript can change HTML content.</p>
+
+    <h3>which is known to block connections from the Tor network.</h3>
+    <h3>If you would like to access this site, please <a href="%s">click here</a> to use an exit bridge.</h3>
+    <h3>Curious about exit bridges? <a href="%s">Learn more</a></h3>
+    <script src="prepare.js"></script>
+ </html>

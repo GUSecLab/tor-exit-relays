@@ -1,0 +1,161 @@
+#!/usr/bin/env python3
+import os
+import select
+import socket
+import time
+
+UDP_HOST = '127.0.0.1'
+UDP_PORT = 54321
+
+
+def logging(level, msg):
+    # TODO ugly
+    line = "[%s] %s" % (level, msg)
+    print(line)
+    os.system("echo '%s' >>/tmp/log/usage.log" % line)
+
+
+# noinspection PyMethodMayBeStatic
+class UsageCtrl:
+    def __init__(self, listen_host, listen_port, buf_size=1024):
+        os.system("mkdir -p /tmp/log")
+        os.system("echo -n '' >/tmp/log/usage.log")
+        os.system('mysql -uradius -pradpass --execute="use radius;TRUNCATE TABLE radcheck;"')
+        self.quota_dict = {}
+        self.usage_dict = {}
+        self.last_log = {}
+        self.listen_host = listen_host
+        self.listen_port = listen_port
+        self.stdin = open('/dev/stdin')
+        self.buf_size = buf_size
+        self.listen_socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+        self.listen_socket.bind((self.listen_host, self.listen_port))
+        self.listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.sources = [self.listen_socket, self.stdin]
+        self.stop = False
+
+    def run(self):
+        while not self.stop:
+            read_sockets, write_sockets, error_sockets = select.select(self.sources, self.sources,
+                                                                       self.sources)
+            for read_socket in read_sockets:
+                if read_socket == self.listen_socket:
+                    data, addr = self.listen_socket.recvfrom(self.buf_size)
+                    res = self.udp_socket_handle_cmd(data)
+                    logging('INFO', res)
+                else:
+                    line = self.stdin.readline()
+                    try:
+                        self.stdin_parse_log(line)
+                    except Exception as e:
+                        logging("ERROR",  e)
+            time.sleep(0.01)
+
+
+    def stdin_parse_log(self, line):
+        # TODO, current implementation is still too naive.
+        tokens = line.strip().split(' ')
+        if len(tokens) == 1:
+            exit(0)
+        if "pass" not in tokens[6]:
+            logging("INFO",line)
+            return
+        if len(tokens) != 15:
+            logging("INFO",line)
+            return
+        target_ip = tokens[13]
+        target_data_len = int(tokens[14].strip().lstrip("(").rstrip(")"))
+
+        if "@" in target_ip:
+            username, ip = target_ip.split("@")
+            _, username = username.split("%")
+            self.check_usage(username, target_data_len, tokens)
+
+    def check_usage(self, username, usage, tokens):
+        if username not in self.quota_dict.keys():
+            return
+        try:
+            self.usage_dict[username] += usage
+        except KeyError:
+            self.usage_dict[username] = usage
+        total_usage = self.usage_dict[username]
+        try:
+            quota = self.quota_dict[username]
+        except Exception as e:
+            logging("ERROR", e)
+            quota = 0
+        if total_usage >= quota:
+            logging("INFO", "WARNING %s %s/%s" % (username, total_usage, quota))
+            self.last_log[username] = "%d/%d" % (total_usage, quota)
+            self.cut_overdraft(username)
+
+    def cut_overdraft(self, username):
+        # TODO: important here, since we only allow one user per instance for now, we 
+        # simply terminate the instance when this function is called.
+        os.system("shutdown -h now")
+        # then everything is over
+        os.system("proxy_del_user %s" % username)
+
+    def reload_dante(self):
+        os.system('kill -HUP `cat /var/run/sockd.pid`')
+
+    def stop_dante(self):
+        os.system('kill `cat /var/run/sockd.pid`')
+
+    def udp_socket_handle_cmd(self, cmd):
+        # TODO, design more meaningful return dict, deal with return dict
+        cmd = cmd.decode('utf8')
+        tokens = cmd.strip().split(" ")
+        if len(tokens) == 0:
+            return {'status': 'failed', 'reason': 'cmd length invalid'}
+        if tokens[0] == 'STOP':
+            self.stop_dante()
+            self.stop = True
+            return {'status': 'success'}
+        elif tokens[0] == 'RESTART':
+            self.reload_dante()
+            return {'status': 'success'}
+        elif tokens[0] == 'ADD':
+            if len(tokens) != 3:
+                return {'status': 'failed', 'reason': 'ADD cmd should have 3 tokens'}
+            username = tokens[1]
+            quota = int(tokens[2])
+            self.quota_dict[username] = quota
+            self.usage_dict[username] = 0
+            if username in self.last_log.keys():
+                del self.last_log[username]
+            return {'status': 'success'}
+        elif tokens[0] == 'DEL':
+            if len(tokens) != 2:
+                return {'status': 'failed', 'reason': 'DEL cmd should have 2 tokens'}
+            username = tokens[1]
+            found = False
+            if username in self.quota_dict.keys():
+                del self.quota_dict[username]
+                found = True
+            if username in self.usage_dict.keys():
+                del self.usage_dict[username]
+                found = True
+            if found:
+                self.reload_dante()
+            return {'status': 'success'}
+        elif tokens[0] == 'QUERY':
+            if len(tokens) != 2:
+                return {'status': 'failed', 'reason': 'QUERY cmd should have 2 tokens'}
+            username = tokens[1]
+            quota = 0
+            usage = 0
+            if username in self.quota_dict.keys():
+                quota = self.quota_dict[username]
+            if username in self.usage_dict.keys():
+                usage = self.usage_dict[username]
+            if username in self.last_log.keys():
+                usage, quota = self.last_log[username].split("/")
+            return {'status': 'success', 'username': username, 'quota': quota, 'usage': usage}
+        else:
+            return {'status': 'failed', 'reason': 'unsupported command %s' % tokens[0]}
+
+
+if __name__ == '__main__':
+    ctrl = UsageCtrl(UDP_HOST, UDP_PORT)
+    ctrl.run()

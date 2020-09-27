@@ -1,0 +1,16 @@
+Site is up at http://bridgebroker.cs-georgetown.net/
+
+The captcha library I used:
+    https://labs.abeautifulsite.net/simple-php-captcha/
+
+Python cgi script to start instances is at cgi/new_instance.py.
+You have to call this script from php. eg.  system('python cgi/new_instance.py');
+
+When setting up production server, access to backgrounds, fonts, and cgi folder
+should be denied for security purposes.
+
+new_instance.py has functions to start, stop and send commands to an instance.
+Some features such as cloudwatch monitoring has not been implemented.
+
+Boto3 has good docs at:
+    https://boto3.amazonaws.com/v1/documentation/api/latest/index.html

@@ -1,0 +1,10 @@
+{
+"ami":"ami-112233445566aabbc",
+"normal_min_count":1,
+"normal_max_count":1,
+"normal_instance_type":"t3.nano",
+"normal_security_groups":["security_bridge"],
+"normal_instance_initiated_shutdown_behavior":"terminate",
+"normal_iam_instance_profile":
+	{"Arn": "arn:aws:iam::112233445566:instance-profile/bridge"}
+}

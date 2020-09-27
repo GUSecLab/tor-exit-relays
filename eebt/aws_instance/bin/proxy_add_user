@@ -1,0 +1,9 @@
+#!/bin/bash
+USER_NAME=$1
+USER_PADDWD=$2
+USER_QUOTA=$3
+ALIVE_TIME=$4
+mysql -uradius -pradpass --execute="use radius;delete from radcheck where username='$USER_NAME';"
+mysql -uradius -pradpass --execute="use radius;insert into radcheck (username,attribute,value,op) values('$USER_NAME','Cleartext-Password','$USER_PADDWD',':=');"
+echo "ADD $USER_NAME $USER_QUOTA" > /dev/udp/127.0.0.1/54321
+[ ! -z "$ALIVE_TIME" ] && shutdown -h $ALIVE_TIME
