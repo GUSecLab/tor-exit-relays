@@ -4,8 +4,8 @@ This repo corresponds to the [Tor Exit Relay](https://seclab.cs.georgetown.edu/h
 a project of [Georgetown SecLab](https://seclab.cs.georgetown.edu/).
 
 This project addresses the Tor exit blocking problem, in which websites disallow clients arriving from Tor. 
-This problem is a growing and becoming potentially existential threat to the anonymity network. 
-We introduce two architectures that provide ephemeral exit bridges for Tor which are difficult to enumerate 
+This problem is a growing and potentially existential threat to the anonymity network. 
+We introduce two architectures that provide ephemeral exit bridges for Tor, which are difficult to enumerate 
 and block. Our techniques employ a micropayment system that compensates exit bridge operators for their services, 
 and a privacy-preserving reputation scheme that prevents freeloading. We show that our exit bridge architectures 
 effectively thwart server-side blocking of Tor with little performance overhead.
