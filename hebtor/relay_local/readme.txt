@@ -8,7 +8,7 @@ network.proxy.no_proxies_on 127.0.0.1
 # todo
 
 
-add measurement of service
+add better measurement of service
 
 make per tab instance work again
 
