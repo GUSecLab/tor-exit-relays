@@ -1,7 +1,7 @@
 
 ###### Initializing ##############
 
-# when running on a ubuntu version:
+# when running on a ubuntu version, you may want to disable unattended-upgrades:
 
 sudo dpkg-reconfigure -plow unattended-upgrades
 
@@ -11,39 +11,27 @@ sudo dpkg-reconfigure -plow unattended-upgrades
 
 sudo apt-get update
 sudo apt-get upgrade
-sudo apt-get install python3 python3-pip
-sudo -H pip3 install Django
-sudo -H pip3 install pycryptodome
-
-# install tor
-
-sudo apt-get install tor
-
-sudo rm /etc/tor/torrc
-sudo service tor stop
-
-# configure torrc, change HiddenServiceDir and HiddenServicePort accordingly, say:
-
-HiddenServiceDir /home/username/onion_service
-HiddenServicePort 80 127.0.0.1:8000
+sudo apt-get install python3 python3-pip tor
+sudo -H pip3 install Django pycryptodome
 
 
-# start tor client for hidden service
 
-tor -f torrc
-
-# get onion address from /home/username/onion_service/hostname
-# replace onion address in ALLOWED_HOSTS in exampl1/example1/settings.py
+# Let's say you moved the broker folder to your home dir, so you should have 
+# this file on this path: ~/broker/readme.txt
 
 
-cd example1
+# generate Broker ECC Key, broker onion address, start Tor proxy for broker:
 
-# generate Broker ECC Key:
+cd ~/broker/example1
 
-python3 key_generator.py
+python3 init.py
+
+# the new broker onion address would be in path ~/.hebtor/onion_service
+
 
 # init database
 
+cd ~/broker/example1
 python3 manage.py makemigrations
 python3 manage.py migrate
 
@@ -54,20 +42,14 @@ python3 manage.py migrate
 
 ###### Daily running: ############
 
-tor -f torrc
+tor -f ~/broker/example1/torrc
 
-cd example1
+cd ~/broker/example1
 python3 manage.py runserver 0:8000
 
 
-# features missing (TODO):
-
-# test pop verification, tag verification, reputation update.
+##### features missing (TODO): ###
 
 # enable csrf_token check, make sure back button will trigger new hCaptcha session.
 
 # implement timeout events for restocking non-paid proxy, etc.
-
-
-
-

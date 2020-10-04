@@ -2,6 +2,8 @@
 
 ###### Initialize ###################
 
+# install dependencies, this will install tor, python3 and relative modules, and microsocks, a tiny socks5 server for our demo
+
 # sudo ./00_install_dependencies.sh
 
 # init configs
@@ -19,10 +21,6 @@ python3 ctrl.py --get-broker-key
 
 python3 manage.py makemigrations
 python3 manage.py migrate
-
-sudo rm /etc/tor/torrc
-sudo service tor stop
-
 
 
 #
@@ -47,4 +45,4 @@ python3 ctrl.py --offline
 
 # todo
 
-modify microsocks, add timeout, bytes out action, allow multiple credentials
+modify microsocks, add timeout, bytes out action, allow multiple credentials/users

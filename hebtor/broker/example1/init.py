@@ -28,8 +28,10 @@ def generate_ecc_key():
 
 
 def start_tor():
-    print("Restart tor proxy...")
+    print("Restartint tor proxy...")
+    print("Killing existing tor proxy if any...")
     os.system("kill `ps ax | grep 'hebtor/torrc' | grep -v grep | awk '{print $1}'`")
+    print("Starting a new tor proxy...")
     os.system("nohup tor -f %s </dev/null >/dev/null 2>&1 &"
               % os.path.join(ROOT_PATH, "torrc"))
 
