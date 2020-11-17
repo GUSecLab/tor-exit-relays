@@ -15,4 +15,4 @@ and [hebtor](https://github.com/GUSecLab/tor-exit-relays/tree/master/hebtor). To
 [eebt](https://github.com/GUSecLab/tor-exit-relays/blob/master/eebt) corresponds to our first publication, 
 Ephemeral Exit Bridges for Tor (DSN2020), and [hebtor](https://github.com/GUSecLab/tor-exit-relays/tree/master/hebtor) 
 corresponds to our second publication, Bypassing Tor Exit Blocking 
-with Exit Bridge Onion Services (CCS2020). Both packages are fully open-sourced under [TODO add license]().
+with Exit Bridge Onion Services (CCS2020). Both packages are fully open-sourced under [GPLv2 license]().
